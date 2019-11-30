@@ -40,14 +40,14 @@ endmodule
 
 
 /// ripple adder with inputs/outputs that are convenient for use in array multiplier
-module ripple_adder(zout, ppout, ttin, ppin);
+module ripple_adder(ppout, pout, ttin, ppin);
 parameter WIDTH = 4;
 
 //) If carryout/overflow is included, 
 //+ the output OUT of a normal adder has width WIDTH+1. 
-//+ We assign the least significant bit of OUT to the output zout. 
+//+ We assign the least significant bit of OUT to the output pout. 
 //+ We assign the remaining bits (in order) of OUT to the output ppout. 
-output zout;
+output pout;
 output [WIDTH-1:0] ppout;
 // inputs from scalar multiplication and the previous ripple adder
 input [WIDTH-1:0] ttin, ppin;
@@ -56,7 +56,7 @@ wire [WIDTH-1:1] w;
 
 // first module
 full_adder m0(
-	.zout(zout), 
+	.zout(pout), 
 	.cout(w[1]), 
 	.ain(ttin[0]), 
 	.bin(ppin[0]), 
@@ -78,7 +78,7 @@ genvar i;
 generate
 	for (i = 1; i < WIDTH-1; i=i+1) begin: loop
 		full_adder mi(
-			.zout(), 
+			.zout(),  TODOoooooooooooooooooooooooooooooooo
 			.cout(), 
 			.ain(), 
 			.bin(), 
@@ -113,19 +113,90 @@ endgenerate
 endmodule
 
 
-module multiplier_layer();
+/// layer of a general multiplier: scalar multiplication and addition. 
+//) yields a single partial product and one completed product bit. 
+//- ppout: the slice [\infty:1] of the partial product output
+//- pout: the LSB of the partial product output
+//- ain: the input a to the multiplier
+//- bin: a digit from the input b to the multiplier
+//- ppin: the partial product output from the previous layer
+module multiplier_layer(ppout, pout, ain, bin, ppin);
 parameter WIDTH = 4;
+parameter IS_LAYER0 = 0;
 
-// TODOOOOOOOOOOOOOOOOO
+input [WIDTH-1:0] ain;
+input bin;
+output pout;
+output [WIDTH-1:0] ppout;
+
+wire [WIDTH-1:0] tt;
+
+// module scalar_mult(ttout, ain, bin);
+scalar_mult m0(
+    ttout.(tt), 
+    .ain(ain), 
+    .bin(bin)
+);
+
+if (IS_LAYER0) begin
+    assign pout = tt[0];
+    assign ppout = tt___minusLSB;
+end
+else begin
+    // module ripple_adder(zout, ppout, ttin, ppin);
+    ripple_adder m1(
+        zout(pout), 
+        .ppout(ppout), 
+        .ttin(tt), 
+        .ppin(ppin)
+    );
+end
 
 endmodule
 
 
+
+
+
 /// WIDTH-bit multiplier
-module multWIDTHbit();
+module multWIDTHbit(prodout, ain, bin);
 parameter WIDTH = 4;
 
-// TODOOOOOOOOOOOOOOOOO
+output [2*WIDTH-1:0] product;
+input [WIDTH-1:0] ain, bin;
+
+wire [???*WIDTH-1:0] w;
+
+
+// module multiplier_layer(ppout, pout, ain, bin, ppin);
+
+assign product[0] = 
+
+// first module
+multiplier_layer(
+    .ppout(w[WIDTH-1:0]), 
+    .pout(prodout[1]), 
+    .ain(ain), 
+    .bin(bin[1]), 
+    .ppin(tt1)
+);
+
+// last module
+
+
+
+genvar i;
+
+generate
+    for (i=1; i < WIDTH; i=i+1) begin: loop
+        
+    
+    end
+endgenerate
+
+
+
+
 
 endmodule
 
