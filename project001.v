@@ -4,6 +4,17 @@
 
 
 
+// For the project code, I have preferred "flat" nets over vectors. 
+// My experience with Verilog vectors has been that they are not convenient, 
+// particularly because inputs and outputs cannot be vectors. 
+// Therefore, rather than mixing styles, I have used flat nets throughout, 
+// and avoided the use of vectors. 
+
+
+
+
+
+
 /// standard full adder
 module full_adder(zout, cout, ain, bin, cin);
 
@@ -41,8 +52,54 @@ endmodule
 
 
 /// basic ripple adder with external carryin
-module rippleTCadder(zout, overflow, ain, bin, cin);
+//- zout: output integer (sum)
+//- cout: carryout
+//- ain, bin: input integers
+//- cin: carryin. 
+//) set carry to high after negating one of the inputs to perform subtraction. 
+module ripple_adder(zout, cout, ain, bin, cin);
 parameter WIDTH = 8;
+
+output [WIDTH-1:0] zout;
+output cout;
+input [WIDTH-1:0] ain, bin;
+input cin;
+
+wire [WIDTH-1:1] w;
+
+//module full_adder(zout, cout, ain, bin, cin);
+
+// first module
+full_adder m0(
+    .zout(zout[0]), 
+    .cout(w[1]), 
+    .ain(ain[0]), 
+    .bin(bin[0]), 
+    .cin(cin)
+);
+
+// last module
+full_adder ml(
+    .zout(zout[WIDTH-1]), 
+    .cout(cout), 
+    .ain(ain[WIDTH-1]), 
+    .bin(bin[WIDTH-1]), 
+    .cin(w[WIDTH-1])
+);
+
+// ith module
+genvar i;
+generate
+    for (i=1; i < WIDTH-1; i=i+1) begin: loop
+        full_adder mi(
+            .zout(zout[i]), 
+            .cout(w[i+1]), 
+            .ain(ain[i]), 
+            .bin(bin[i]), 
+            .cin(w[i])
+        );
+    end
+endgenerate
 
 endmodule
 
@@ -81,7 +138,7 @@ full_adder m0(
 );
 
 // last module 
-full_adder m_end(
+full_adder ml(
 	.zout(ppout[WIDTH-2]), 
 	.cout(ppout[WIDTH-1]), 
 	.ain(ttin[WIDTH-1]), 
@@ -95,11 +152,11 @@ genvar i;
 generate
 	for (i = 1; i < WIDTH-1; i=i+1) begin: loop
 		full_adder mi(
-			.zout(),  TODOoooooooooooooooooooooooooooooooo
-			.cout(), 
-			.ain(), 
-			.bin(), 
-			.cin()
+			.zout(ppout[i-1]), 
+			.cout(w[i+1]), 
+			.ain(ttin[i]), 
+			.bin(ppin[i]), 
+			.cin(w[i])
 		);
 	end
 endgenerate
@@ -178,6 +235,8 @@ endmodule
 
 
 /// WIDTH-bit multiplier
+//- prodout - output integer (product of ain, bin)
+//- ain, bin - input integers
 module multWIDTHbit(prodout, ain, bin);
 parameter WIDTH = 4;
 
@@ -245,6 +304,8 @@ multWIDTHbit m0(
 	.ain(ain), 
 	.bin(bin)
 );
+// Change this line to change the input width.
+// This isn't strictly necessary, because 4 is the default. 
 defparam m0 .WIDTH=4;
 
 endmodule
@@ -273,9 +334,9 @@ endmodule
 
 
 
-/// select-AND gate
-// Description: return zero if sel is 0, or ain if sel is 1. 
-module sAND8(zout, ain, sel);
+/// select-NAND gate
+// Description: return zero if sel is 0, or ~ain if sel is 1. 
+module sNAND(zout, ain, sel);
 parameter WIDTH = 8;
 
 input [WIDTH-1:0] ain;
@@ -288,7 +349,7 @@ genvar i;
 
 generate
 	for (i=0; i<WIDTH; i=i+1) begin: loop
-		and mi(zout[i], ain[i], sel);
+		nand mi(zout[i], ain[i], sel);
 	end
 endgenerate
 
@@ -296,9 +357,9 @@ endmodule
 
 
 
-/// bitwise-OR gate
-// Description: return the bitwise OR of ain and bin.
-module bOR8(zout, ain, bin);
+/// bitwise-NAND gate
+// Description: return the bitwise NAND of ain and bin.
+module bNAND(zout, ain, bin);
 parameter WIDTH = 8;
 
 input [WIDTH-1:0] ain, bin;
@@ -310,43 +371,125 @@ genvar i;
 
 generate
 	for (i=0; i<WIDTH; i=i+1) begin: loop
-		or mi(zout[i], ain[i], bin[i]);
+		nand mi(zout[i], ain[i], bin[i]);
 	end
 endgenerate
 
 endmodule
 
 
+
+
 // 2:1 multiplexer with variable input/output width
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Convention: consider sel's inputs as increasing integers: 
+//      0, followed by 1. 
+// Consider the flat vectors `inputs` as segments, starting from the right: 
+//      [WIDTH-1:0], followed by [2*WIDTH-1:WIDTH]. 
+// We match these two orderings. 
+// We do the same in the general multiplexer that follows. 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 module mux21(zout, inputs, sel);
 parameter WIDTH = 8;
 
+output [WIDTH-1:0] zout;
+input [2*WIDTH-1:0] inputs;
+input sel;
+
 // The project description requires gate level modeling is used. 
 
-// TODOOOOOOOOOOOOOOOOOOO
+wire [2*WIDTH-1:0] w;
+
+sNAND m0(
+    .zout(w[WIDTH-1:0]), 
+    .ain(inputs[WIDTH-1:0]), 
+    .sel(~sel)
+);
+sNAND m1(
+    .zout(w[2*WIDTH-1:WIDTH]),
+    .ain(inputs[2*WIDTH-1:WIDTH]), 
+    .sel(sel)
+);
+bNAND m2(
+    .zout, 
+    .ain(w[2*WIDTH-1:WIDTH]), 
+    .bin(w[WIDTH-1:0])
+);
+
+defparam m0 .WIDTH=WIDTH;
+defparam m1 .WIDTH=WIDTH;
+defparam m2 .WIDTH=WIDTH;
 
 endmodule
 
 
-// General multiplexer
+/// layer submodule of general multiplexer module
+module mux_general_layer(layerout, layerin, sel);
+parameter WIDTH = 8;
+parameter LEVEL = 0;
+localparam NUM_MUXES = 2**LEVEL;
+
+output [LEVEL*WIDTH-1:0] layerout; 
+input [2*LEVEL*WIDTH-1:0] layerin;
+
+genvar i;
+generate
+    for (i=0; i<NUM_MUXES; i=i+1) begin: loop
+        mux21 mi(
+            .zout(layerout[(i+1)*WIDTH-1:i*WIDTH]), 
+            .inputs(layerin[2*(i+1)*WIDTH-1:2*i*WIDTH]), 
+            .sel(sel)
+        );
+        defparam mi .WIDTH=WIDTH;
+    end
+endgenerate
+
+endmodule
+
+
+
+/// General multiplexer
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//) See the important comment above the module mux21.
+//) The parameter SEL_WIDTH sets the number of inputs to the mux: 
+// SEL_WIDTH = 1, then mux_general is a 2:1 mux.
+// SEL_WIDTH = 2, then mux_general is a 4:1 mux.
+// SEL_WIDTH = 3, then mux_general is a 8:1 mux. 
+// SEL_WIDTH = 4, then mux_general is a 16:1 mux. 
+// Etc. 
+// For this project, we use this module for the shift/rotate logic, and for the ALU controller. 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 module mux_general(zout, inputs, sel);
 parameter WIDTH = 8;
-parameter NUM_INPUTS = 16;
+parameter SEL_WIDTH = 4;
 
-// The project description requires gate level modeling is used. 
+output [WIDTH*SEL_WIDTH-1:0] zout;
+input [2*WIDTH*SEL_WIDTH-1: 0] inputs;
+input [SEL_WIDTH-1:0] sel;
 
-// TODOOOOOOOOOOOOOOOOOOO
+genvar i;
+generate
+    for (i=0; i<NUM_MUXES; i=i+1) begin: loop
+        mux_general_layer mi(
+            .zout(layerout[(i+1)*WIDTH-1:i*WIDTH]), 
+            .inputs(layerin[2*(i+1)*WIDTH-1:2*i*WIDTH]), 
+            .sel(sel)
+        );
+        defparam mi .WIDTH=WIDTH;
+        defparam mi .LEVEL=i;
+    end
+endgenerate
 
 endmodule
 
 
 
 
-// alu8bit controller
+// 8-bit ALU controller, to the project's specification. 
 module controller(
-	zout, 
+	aluout, 
 	/// select signal
-	sel, 
+	ctrl, 
 	/// inputs
 	add8bit, 
 	sub8bit, 
@@ -393,7 +536,7 @@ mux_general m1(
 	.sel(sel)
 );
 defparam m1 .WIDTH=8;
-defparam m1 .NUM_INPUTS=16;
+defparam m1 .SEL_WIDTH=4;
 
 endmodule
 
@@ -454,7 +597,6 @@ endmodule
 /// Shift, Rotate, Nop
 /////////////////////////////
 
-
 /// shifter/rotater building-block module
 //) Can shift/rotate up to 7 bits. 
 module shiftrotateWIDTHbit(zout, ain, bin);
@@ -470,6 +612,8 @@ output [WIDTH-1:0] zout;
 reg [7*WIDTH-1:0] products;
 
 // The project description requires gate level modeling is used. 
+
+// initial block????
 
 if (ROTATE) begin
     if (RIGHT) begin
@@ -527,13 +671,13 @@ begin
     end
 end
 
-mux_general(
+mux_general m0(
     .zout(zout), 
-    .inputs(les produits), 
+    .inputs(les produits TODOOOOOOOOO), 
     .sel(bin[2:0])
 );
 defparam .WIDTH=WIDTH;
-defparam .NUM_INPUTS=8;
+defparam .SEL_WIDTH=3;
 
 endmodule
 
