@@ -237,8 +237,8 @@ endmodule
 /// 4-bit multiplier
 module mult4bit(zout, ain, bin);
 
+output [7:0] zout;
 input [3:0] ain, bin; 
-output [3:0] zout;
 
 multWIDTHbit m0(
 	.zout(zout), 
