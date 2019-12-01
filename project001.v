@@ -377,6 +377,62 @@ endgenerate
 
 endmodule
 
+///////////////////////////////////////////////////////////////////////////////////////////////// 
+// While we are at it, we define other bitwise operators we will need.
+// The code is highly similar to the code above. 
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// not
+module bNOT(zout, ain, bin);
+parameter WIDTH = 8;
+
+input [WIDTH-1:0] ain, bin;
+output [WIDTH-1:0] zout;
+ 
+genvar i;
+
+generate
+	for (i=0; i<WIDTH; i=i+1) begin: loop
+		not mi(zout[i], ain[i], bin[i]);
+	end
+endgenerate
+
+endmodule
+
+/// nor
+module bNOR(zout, ain, bin);
+parameter WIDTH = 8;
+
+input [WIDTH-1:0] ain, bin;
+output [WIDTH-1:0] zout;
+ 
+genvar i;
+
+generate
+	for (i=0; i<WIDTH; i=i+1) begin: loop
+		nor mi(zout[i], ain[i], bin[i]);
+	end
+endgenerate
+
+endmodule
+
+/// xnor
+module bXNOR(zout, ain, bin);
+parameter WIDTH = 8;
+
+input [WIDTH-1:0] ain, bin;
+output [WIDTH-1:0] zout;
+ 
+genvar i;
+
+generate
+	for (i=0; i<WIDTH; i=i+1) begin: loop
+		xnor mi(zout[i], ain[i], bin[i]);
+	end
+endgenerate
+
+endmodule
+
 
 
 
@@ -469,7 +525,7 @@ input [SEL_WIDTH-1:0] sel;
 
 genvar i;
 generate
-    for (i=0; i<NUM_MUXES; i=i+1) begin: loop
+    for (i=0; i<SEL_WIDTH; i=i+1) begin: loop
         mux_general_layer mi(
             .zout(layerout[(i+1)*WIDTH-1:i*WIDTH]), 
             .inputs(layerin[2*(i+1)*WIDTH-1:2*i*WIDTH]), 
@@ -529,11 +585,28 @@ input [3:0] sel;
 output [7:0] zout; 
 
 mux_general m1(
-	.zout(zout), 
+	.zout(aluout), 
 	.inputs({
-		// todo
+		// todo: order them correctly
+                // TODOooooooooooooooooooooooooooooooooooooo
+            add8bit[7:0], 
+            sub8bit[7:0], 
+            rsb8bit[7:0], 
+            mul4bithigh[7:0], 
+            nor8bit[7:0], 
+            not8bit[7:0], 
+            nand8bit[7:0], 
+            xnor8bit[7:0], 
+            srl8bit[7:0], 
+            sll8bit[7:0], 
+            ror8bit[7:0], 
+            rol8bit[7:0], 
+            nop8bit1[7:0], 
+            nop8bit2[7:0], 
+            nop8bit3[7:0], 
+            nop8bit4[7:0]
 	}), 
-	.sel(sel)
+	.sel(ctrl)
 );
 defparam m1 .WIDTH=8;
 defparam m1 .SEL_WIDTH=4;
