@@ -259,7 +259,7 @@ defparam m0 .WIDTH = WIDTH;
 defparam m0 .IS_LAYER0 = 1;
 
 /// last module
-multiplier_layer mlast(
+multiplier_layer ml(
     .ppout(prodout[2*WIDTH-1:WIDTH]), 
     .pout(prodout[WIDTH-1]), 
     .ain(ain), 
@@ -329,7 +329,7 @@ endmodule
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // We start by creating a general-purpose multiplexer. 
 // We parametrize this module by the number of inputs and the input width.  
-// We call these two parameters WIDTH and NUM_INPUTS, respectively. 
+// We call these two parameters WIDTH and SEL_WIDTH, respectively. 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
