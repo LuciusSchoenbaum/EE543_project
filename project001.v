@@ -39,8 +39,25 @@ endmodule
 
 
 
+
+/// basic ripple adder with external carryin
+module rippleTCadder(zout, overflow, ain, bin, cin);
+parameter WIDTH = 8;
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
 /// ripple adder with inputs/outputs that are convenient for use in array multiplier
-module ripple_adder(ppout, pout, ttin, ppin);
+module pp_ripple_adder(ppout, pout, ttin, ppin);
 parameter WIDTH = 4;
 
 //) If carryout/overflow is included, 
@@ -91,7 +108,6 @@ endmodule
 
 
 
-
 /// scalar multiplier
 module scalar_mult(ttout, ain, bin);
 parameter WIDTH = 4;
@@ -122,6 +138,9 @@ endmodule
 //- ppin: the partial product output from the previous layer
 module multiplier_layer(ppout, pout, ain, bin, ppin);
 parameter WIDTH = 4;
+/// is the layer the zeroth layer? 
+//) in this layer, the input ppin is zero, 
+//+ but we don't wish to implement an adder just in order to add zero. 
 parameter IS_LAYER0 = 0;
 
 input [WIDTH-1:0] ain;
@@ -140,11 +159,11 @@ scalar_mult m0(
 
 if (IS_LAYER0) begin
     assign pout = tt[0];
-    assign ppout = tt___minusLSB;
+    assign ppout = {0'b0, tt[WIDTH-1:1]};
 end
 else begin
-    // module ripple_adder(zout, ppout, ttin, ppin);
-    ripple_adder m1(
+    // module pp_ripple_adder(zout, ppout, ttin, ppin);
+    pp_ripple_adder m1(
         zout(pout), 
         .ppout(ppout), 
         .ttin(tt), 
@@ -165,40 +184,50 @@ parameter WIDTH = 4;
 output [2*WIDTH-1:0] product;
 input [WIDTH-1:0] ain, bin;
 
-wire [???*WIDTH-1:0] w;
-
+wire [WIDTH*WIDTH-WIDTH-1:0] w;
 
 // module multiplier_layer(ppout, pout, ain, bin, ppin);
 
-assign product[0] = 
-
-// first module
-multiplier_layer(
+/// first module
+multiplier_layer m0(
     .ppout(w[WIDTH-1:0]), 
-    .pout(prodout[1]), 
+    .pout(prodout[0]), 
     .ain(ain), 
-    .bin(bin[1]), 
-    .ppin(tt1)
+    .bin(bin[0]), 
+    .ppin({WIDTH{1'b0}})
 );
+defparam m0 .WIDTH = WIDTH;
+defparam m0 .IS_LAYER0 = 1;
 
-// last module
+/// last module
+multiplier_layer mlast(
+    .ppout(prodout[2*WIDTH-1:WIDTH]), 
+    .pout(prodout[WIDTH-1]), 
+    .ain(ain), 
+    .bin(bin[WIDTH-1]), 
+    .ppin(w[WIDTH*WIDTH-WIDTH-1:(WIDTH-1)*(WIDTH-1)])
+);
+defparam mlast .WIDTH = WIDTH;
 
-
-
+/// ith module
 genvar i;
-
 generate
     for (i=1; i < WIDTH; i=i+1) begin: loop
-        
-    
+        multiplier_layer mi(
+            .ppout(w[(i*WIDTH-1:(i-1)*WIDTH]), 
+            .pout(prodout[i]), 
+            .ain(ain), 
+            .bin(bin[i]), 
+            .ppin(w[(i+1)*WIDTH-1:i*WIDTH])
+        );
+        defparam mi .WIDTH = WIDTH;
     end
 endgenerate
 
-
-
-
-
 endmodule
+
+
+
 
 
 ////////////////////////////////////////
@@ -236,11 +265,11 @@ endmodule
 
 
 
-/////////////////////////////////////////////////////////
-// We parametrize by the number of inputs and the width.  
-// ()()() TODO: DESCRIPTION.
-// talk about WIDTH, talk about NUM_INPUTS
-/////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// We start by creating a general-purpose multiplexer. 
+// We parametrize this module by the number of inputs and the input width.  
+// We call these two parameters WIDTH and NUM_INPUTS, respectively. 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -303,6 +332,8 @@ endmodule
 module mux_general(zout, inputs, sel);
 parameter WIDTH = 8;
 parameter NUM_INPUTS = 16;
+
+// The project description requires gate level modeling is used. 
 
 // TODOOOOOOOOOOOOOOOOOOO
 
@@ -419,6 +450,102 @@ module mult4bithigh();
 
 endmodule
 
+/////////////////////////////
+/// Shift, Rotate, Nop
+/////////////////////////////
+
+
+/// shifter/rotater building-block module
+//) Can shift/rotate up to 7 bits. 
+module shiftrotateWIDTHbit(zout, ain, bin);
+parameter WIDTH = 8;
+/// if RIGHT == 0, shift/rotate left, else rotate right.
+parameter RIGHT = 0;
+/// if ROTATE = 0, shift, else rotate. 
+parameter ROTATE = 0;
+
+input [WIDTH-1:0] ain, bin;
+output [WIDTH-1:0] zout;
+
+reg [7*WIDTH-1:0] products;
+
+// The project description requires gate level modeling is used. 
+
+if (ROTATE) begin
+    if (RIGHT) begin
+        products[1*WIDTH-1:0*WIDTH] = {ain[0:0], ain[WIDTH-1:1]};
+        products[2*WIDTH-1:1*WIDTH] = {ain[1:0], ain[WIDTH-1:2]};
+        products[3*WIDTH-1:2*WIDTH] = {ain[2:0], ain[WIDTH-1:3]};
+        products[4*WIDTH-1:3*WIDTH] = {ain[3:0], ain[WIDTH-1:4]};        
+        //...
+        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[(i-1):0], ain[WIDTH-1]:i]};
+        //...
+        products[5*WIDTH-1:4*WIDTH] = {ain[4:0], ain[WIDTH-1:5]};        
+        products[6*WIDTH-1:5*WIDTH] = {ain[5:0], ain[WIDTH-1:6]};        
+        products[7*WIDTH-1:6*WIDTH] = {ain[6:0], ain[WIDTH-1:7]};
+    end
+    else // LEFT
+    begin
+        products[1*WIDTH-1:0*WIDTH] = {ain[WIDTH-2:0], ain[WIDTH-1:WIDTH-1]};
+        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-3:0], ain[WIDTH-1:WIDTH-2]};
+        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-4:0], ain[WIDTH-1:WIDTH-3]};
+        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-5:0], ain[WIDTH-1:WIDTH-4]};
+        //...
+        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], ain[WIDTH-1:WIDTH-i]};
+        //...
+        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-6:0], ain[WIDTH-1:WIDTH-5]};        
+        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-7:0], ain[WIDTH-1:WIDTH-6]};        
+        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-8:0], ain[WIDTH-1:WIDTH-7]};
+    end
+end
+else // SHIFT
+begin
+    if (RIGHT) begin 
+        products[1*WIDTH-1:0*WIDTH] = {1'b0, ain[WIDTH-1:WIDTH-1]};
+        products[2*WIDTH-1:1*WIDTH] = {2'b0, ain[WIDTH-1:WIDTH-2]};
+        products[3*WIDTH-1:2*WIDTH] = {3'b0, ain[WIDTH-1:WIDTH-3]};
+        products[4*WIDTH-1:3*WIDTH] = {4'b0, ain[WIDTH-1:WIDTH-4]};
+        //...
+        // products[i*WIDTH-1:(i-1)*WIDTH] = {{i{1'b0}}, ain[WIDTH-1:WIDTH-i]};
+        //...
+        products[5*WIDTH-1:4*WIDTH] = {5'b0, ain[WIDTH-1:WIDTH-5]};        
+        products[6*WIDTH-1:5*WIDTH] = {6'b0, ain[WIDTH-1:WIDTH-6]};        
+        products[7*WIDTH-1:6*WIDTH] = {7'b0, ain[WIDTH-1:WIDTH-7]};
+    end
+    else // LEFT
+    begin
+        products[1*WIDTH-1:0*WIDTH] = {ain[WIDTH-2:0], 1'b0};
+        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-3:0], 2'b0};
+        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-4:0], 3'b0};
+        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-5:0], 4'b0};
+        //...
+        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], {i{1'b0}}};
+        //...
+        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-6:0], 5'b1}; 
+        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-7:0], 6'b1};
+        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-8:0], 7'b1};
+    end
+end
+
+mux_general(
+    .zout(zout), 
+    .inputs(les produits), 
+    .sel(bin[2:0])
+);
+defparam .WIDTH=WIDTH;
+defparam .NUM_INPUTS=8;
+
+endmodule
+
+
+module ror8bit();
+
+endmodule
+
+module rol8bit();
+
+endmodule
+
 /// shift right logical (multiply by 2)
 module srl8bit();
 
@@ -429,19 +556,21 @@ module sll8bit();
 
 endmodule
 
-/////////////////////////////
-/// Shift, Rotate, Nop
-/////////////////////////////
 
-module ror8bit();
+/// for a nop instruction, set output to zero
+module nop8bit(zout, ain, bin);
 
-endmodule
+output [7:0] zout;
+input [7:0] ain, bin;
 
-module rol8bit();
+// The project description requires gate level modeling is used. 
 
-endmodule
+// assign zout = 8'b0000_0000;
 
-module nop8bit();
+wire [7:0] w1;
+
+not (w1, ain);
+and (zout, ain, w1);
 
 endmodule
 
