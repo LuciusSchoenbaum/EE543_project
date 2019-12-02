@@ -1,6 +1,5 @@
 // File project001.v Created by Lucius Schoenbaum November 29, 2019
 // EE 543 project for Dr. Na Gong, Fall 2019
-// part 1 (gate-level modeling)
 
 
 
@@ -9,6 +8,19 @@
 // particularly because inputs and outputs cannot be vectors. 
 // Therefore, rather than mixing styles, I have used flat nets throughout, 
 // and avoided the use of vectors. 
+
+// I worked with general input widths. I did this to practice this coding style. 
+// I found that it was worth the extra work, because I grew more comfortable 
+// working this way as I went along. 
+
+
+
+
+
+////////////////
+// Part 1
+////////////////
+
 
 
 
@@ -200,7 +212,7 @@ parameter WIDTH = 4;
 //+ but we don't wish to implement an adder just in order to add zero. 
 parameter IS_LAYER0 = 0;
 
-input [WIDTH-1:0] ain;
+input [WIDTH-1:0] ain, ppin;
 input bin;
 output pout;
 output [WIDTH-1:0] ppout;
@@ -209,24 +221,25 @@ wire [WIDTH-1:0] tt;
 
 // module scalar_mult(ttout, ain, bin);
 scalar_mult m0(
-    ttout.(tt), 
+    .ttout(tt), 
     .ain(ain), 
     .bin(bin)
 );
 
+generate
 if (IS_LAYER0) begin
     assign pout = tt[0];
-    assign ppout = {0'b0, tt[WIDTH-1:1]};
+    assign ppout = {1'b0, tt[WIDTH-1:1]};
 end
 else begin
-    // module pp_ripple_adder(zout, ppout, ttin, ppin);
     pp_ripple_adder m1(
-        zout(pout), 
         .ppout(ppout), 
+        .pout(pout), 
         .ttin(tt), 
         .ppin(ppin)
     );
 end
+endgenerate
 
 endmodule
 
@@ -240,12 +253,10 @@ endmodule
 module multWIDTHbit(prodout, ain, bin);
 parameter WIDTH = 4;
 
-output [2*WIDTH-1:0] product;
+output [2*WIDTH-1:0] prodout;
 input [WIDTH-1:0] ain, bin;
 
-wire [WIDTH*WIDTH-WIDTH-1:0] w;
-
-// module multiplier_layer(ppout, pout, ain, bin, ppin);
+wire [(WIDTH-1)*WIDTH-1:0] w;
 
 /// first module
 multiplier_layer m0(
@@ -264,20 +275,20 @@ multiplier_layer ml(
     .pout(prodout[WIDTH-1]), 
     .ain(ain), 
     .bin(bin[WIDTH-1]), 
-    .ppin(w[WIDTH*WIDTH-WIDTH-1:(WIDTH-1)*(WIDTH-1)])
+    .ppin(w[(WIDTH-1)*WIDTH-1:(WIDTH-2)*WIDTH]) 
 );
-defparam mlast .WIDTH = WIDTH;
+defparam ml .WIDTH = WIDTH;
 
 /// ith module
 genvar i;
 generate
-    for (i=1; i < WIDTH; i=i+1) begin: loop
+    for (i=1; i < WIDTH-1; i=i+1) begin: loop
         multiplier_layer mi(
-            .ppout(w[(i*WIDTH-1:(i-1)*WIDTH]), 
+            .ppout(w[(i+1)*WIDTH-1:i*WIDTH]), 
             .pout(prodout[i]), 
             .ain(ain), 
             .bin(bin[i]), 
-            .ppin(w[(i+1)*WIDTH-1:i*WIDTH])
+            .ppin(w[i*WIDTH-1:(i-1)*WIDTH])
         );
         defparam mi .WIDTH = WIDTH;
     end
@@ -300,13 +311,13 @@ output [7:0] zout;
 input [3:0] ain, bin; 
 
 multWIDTHbit m0(
-	.zout(zout), 
+	.prodout(zout), 
 	.ain(ain), 
 	.bin(bin)
 );
 // Change this line to change the input width.
 // This isn't strictly necessary, because 4 is the default. 
-defparam m0 .WIDTH=4;
+defparam m0 .WIDTH = 4;
 
 endmodule
 
@@ -326,11 +337,31 @@ endmodule
 
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+////////////////
+// Part 2
+////////////////
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// We implement an 8-bit ALU with 12 operations. 
 // We start by creating a general-purpose multiplexer. 
 // We parametrize this module by the number of inputs and the input width.  
 // We call these two parameters WIDTH and SEL_WIDTH, respectively. 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -377,23 +408,23 @@ endgenerate
 
 endmodule
 
-///////////////////////////////////////////////////////////////////////////////////////////////// 
+///////////////////////////////////////////////////////////////////////////////////////////////
 // While we are at it, we define other bitwise operators we will need.
 // The code is highly similar to the code above. 
-////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 /// not
-module bNOT(zout, ain, bin);
+module bNOT(zout, ain);
 parameter WIDTH = 8;
 
-input [WIDTH-1:0] ain, bin;
+input [WIDTH-1:0] ain;
 output [WIDTH-1:0] zout;
  
 genvar i;
 
 generate
 	for (i=0; i<WIDTH; i=i+1) begin: loop
-		not mi(zout[i], ain[i], bin[i]);
+		not mi(zout[i], ain[i]);
 	end
 endgenerate
 
@@ -437,14 +468,14 @@ endmodule
 
 
 // 2:1 multiplexer with variable input/output width
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 // Convention: consider sel's inputs as increasing integers: 
 //      0, followed by 1. 
 // Consider the flat vectors `inputs` as segments, starting from the right: 
 //      [WIDTH-1:0], followed by [2*WIDTH-1:WIDTH]. 
 // We match these two orderings. 
 // We do the same in the general multiplexer that follows. 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 module mux21(zout, inputs, sel);
 parameter WIDTH = 8;
 
@@ -467,7 +498,7 @@ sNAND m1(
     .sel(sel)
 );
 bNAND m2(
-    .zout, 
+    .zout(zout), 
     .ain(w[2*WIDTH-1:WIDTH]), 
     .bin(w[WIDTH-1:0])
 );
@@ -487,6 +518,7 @@ localparam NUM_MUXES = 2**LEVEL;
 
 output [LEVEL*WIDTH-1:0] layerout; 
 input [2*LEVEL*WIDTH-1:0] layerin;
+input sel;
 
 genvar i;
 generate
@@ -505,7 +537,7 @@ endmodule
 
 
 /// General multiplexer
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 //) See the important comment above the module mux21.
 //) The parameter SEL_WIDTH sets the number of inputs to the mux: 
 // SEL_WIDTH = 1, then mux_general is a 2:1 mux.
@@ -513,23 +545,44 @@ endmodule
 // SEL_WIDTH = 3, then mux_general is a 8:1 mux. 
 // SEL_WIDTH = 4, then mux_general is a 16:1 mux. 
 // Etc. 
-// For this project, we use this module for the shift/rotate logic, and for the ALU controller. 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//) For this project, we use this module for the shift/rotate logic, and for the ALU controller. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
 module mux_general(zout, inputs, sel);
 parameter WIDTH = 8;
 parameter SEL_WIDTH = 4;
+localparam NUM_INPUTS = 2**SEL_WIDTH;
 
-output [WIDTH*SEL_WIDTH-1:0] zout;
-input [2*WIDTH*SEL_WIDTH-1: 0] inputs;
+output [WIDTH-1:0] zout;
+input [NUM_INPUTS*WIDTH-1: 0] inputs;
 input [SEL_WIDTH-1:0] sel;
+
+wire [(NUM_INPUTS-1)*WIDTH-1:WIDTH] w;
+
+// first layer, i=SEL_WIDTH-1, closest to inputs
+mux_general_layer m0(
+	.layerout(w[(2**(SEL_WIDTH)-1)*WIDTH-1:(2**(SEL_WIDTH-1)-1)*WIDTH]), 
+	.layerin(inputs), 
+	.sel(sel[0])
+);
+defparam m0 .WIDTH=WIDTH;
+defparam m0 .LEVEL=SEL_WIDTH-1;
+
+// last layer, i=0, closest to output
+mux_general_layer ml(
+	.layerout(zout), 
+	.layerin(w[3*WIDTH-1:WIDTH]), 
+	.sel(sel[SEL_WIDTH-1])
+);
+defparam ml .WIDTH=WIDTH;
+defparam ml .LEVEL=0;
 
 genvar i;
 generate
-    for (i=0; i<SEL_WIDTH; i=i+1) begin: loop
+    for (i=1; i<SEL_WIDTH-1; i=i+1) begin: loop
         mux_general_layer mi(
-            .zout(layerout[(i+1)*WIDTH-1:i*WIDTH]), 
-            .inputs(layerin[2*(i+1)*WIDTH-1:2*i*WIDTH]), 
-            .sel(sel)
+            .layerout(w[(2**(i+1)-1)*WIDTH-1:(2**(i)-1)*WIDTH]), 
+            .layerin(w[(2**(i+2)-1)*WIDTH-1:(2**(i+1)-1)*WIDTH]), 
+            .sel(sel[SEL_WIDTH-1-i])
         );
         defparam mi .WIDTH=WIDTH;
         defparam mi .LEVEL=i;
@@ -544,9 +597,7 @@ endmodule
 // 8-bit ALU controller, to the project's specification. 
 module controller(
 	aluout, 
-	/// select signal
 	ctrl, 
-	/// inputs
 	add8bit, 
 	sub8bit, 
 	rsb8bit, 
@@ -565,6 +616,11 @@ module controller(
 	nop8bit4
 );
 
+// ALU output
+output [7:0] aluout;
+// control signal
+input [3:0] ctrl;
+// inputs
 input [7:0] add8bit; 
 input [7:0] sub8bit; 
 input [7:0] rsb8bit; 
@@ -581,30 +637,26 @@ input [7:0] nop8bit1;
 input [7:0] nop8bit2;
 input [7:0] nop8bit3;
 input [7:0] nop8bit4;
-input [3:0] sel; 
-output [7:0] zout; 
 
 mux_general m1(
 	.zout(aluout), 
 	.inputs({
-		// todo: order them correctly
-                // TODOooooooooooooooooooooooooooooooooooooo
-            add8bit[7:0], 
-            sub8bit[7:0], 
-            rsb8bit[7:0], 
-            mul4bithigh[7:0], 
-            nor8bit[7:0], 
-            not8bit[7:0], 
-            nand8bit[7:0], 
-            xnor8bit[7:0], 
-            srl8bit[7:0], 
-            sll8bit[7:0], 
-            ror8bit[7:0], 
-            rol8bit[7:0], 
-            nop8bit1[7:0], 
-            nop8bit2[7:0], 
-            nop8bit3[7:0], 
-            nop8bit4[7:0]
+		nop8bit1[7:0], // ctrl = 0000
+		add8bit[7:0], // ctrl = 0001
+		sub8bit[7:0], // ctrl = 0010
+		rsb8bit[7:0], // ctrl = 0011
+		mul4bithigh[7:0], // ctrl = 0100
+		nop8bit2[7:0], // ctrl = 0101
+		nop8bit3[7:0], // ctrl = 0110
+		nop8bit4[7:0], // ctrl = 0111
+		nor8bit[7:0], // ctrl = 1000
+		not8bit[7:0], // ctrl = 1001
+		nand8bit[7:0], // ctrl = 1010
+		xnor8bit[7:0], // ctrl = 1011
+		srl8bit[7:0], // ctrl = 1100
+		sll8bit[7:0], // ctrl = 1101
+		ror8bit[7:0], // ctrl = 1110
+		rol8bit[7:0] // ctrl = 1111
 	}), 
 	.sel(ctrl)
 );
@@ -629,19 +681,44 @@ endmodule
 /// Bitwise Operations
 /////////////////////////////
 
-module nor8bit();
+module nor8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+bNOR m(zout, ain, bin);
+defparam m .WIDTH=8;
 
 endmodule
 
-module not8bit();
+// the logical inverse of input2
+module not8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+bNOT m(zout, bin);
+defparam m .WIDTH=8;
 
 endmodule
 
-module nand8bit();
+module nand8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+bNAND m(zout, ain, bin);
+defparam m .WIDTH=8;
 
 endmodule
 
-module xnor8bit();
+module xnor8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+bXNOR m(zout, ain, bin);
+defparam m .WIDTH=8;
 
 endmodule
 
@@ -650,19 +727,57 @@ endmodule
 /// Arithmetic Operations
 /////////////////////////////
 
-module add8bit();
+
+// The project specification requires no carryout.
+module add8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+reg cin = 1'b0;
+
+ripple_adder m(zout, , ain, bin, cin);
+defparam m .WIDTH=8;
 
 endmodule
 
-module sub8bit();
+// input 2 minus input 1
+module sub8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+reg cin = 1'b1;
+
+bNOT m0(zout, bin);
+ripple_adder m1(zout, , ain, bin, cin);
+
+defparam m0 .WIDTH=8;
+defparam m1 .WIDTH=8;
 
 endmodule
 
-module rsb8bit();
+// input 1 minus input 2
+module rsb8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+reg cin = 1'b1;
+
+bNOT m0(zout, ain);
+ripple_adder m1(zout, , ain, bin, cin);
+
+defparam m0 .WIDTH=8;
+defparam m1 .WIDTH=8;
 
 endmodule
 
-module mult4bithigh();
+// the product of the 4 most significant bits of input 1 and input 2 (as integers)
+module mult4bithigh(zout, ain, bin);
+
+output [7:0] zout; 
+input [7:0] ain, bin;
+
+// re-use 4-bit multiplier from part 1:
+mult4bit m(zout, ain[7:4], bin[7:4]);
 
 endmodule
 
@@ -672,6 +787,9 @@ endmodule
 
 /// shifter/rotater building-block module
 //) Can shift/rotate up to 7 bits. 
+//) We code/implement a trivial operation in case of input bin == 0 
+//+ at the cost of area (?)
+//+ because otherwise we wouldn't be able to re-use our multiplexer. 
 module shiftrotateWIDTHbit(zout, ain, bin);
 parameter WIDTH = 8;
 /// if RIGHT == 0, shift/rotate left, else rotate right.
@@ -682,94 +800,133 @@ parameter ROTATE = 0;
 input [WIDTH-1:0] ain, bin;
 output [WIDTH-1:0] zout;
 
-reg [7*WIDTH-1:0] products;
+reg [8*WIDTH-1:0] products;
 
 // The project description requires gate level modeling is used. 
+// Currently I am using an initial block because my original idea requires it, 
+// (which I didn't realize) and I haven't had time to redo it using gate-level code. 
 
-// initial block????
-
+initial begin
 if (ROTATE) begin
     if (RIGHT) begin
-        products[1*WIDTH-1:0*WIDTH] = {ain[0:0], ain[WIDTH-1:1]};
-        products[2*WIDTH-1:1*WIDTH] = {ain[1:0], ain[WIDTH-1:2]};
-        products[3*WIDTH-1:2*WIDTH] = {ain[2:0], ain[WIDTH-1:3]};
-        products[4*WIDTH-1:3*WIDTH] = {ain[3:0], ain[WIDTH-1:4]};        
+		products[1*WIDTH-1:0*WIDTH] = ain;
+        products[2*WIDTH-1:1*WIDTH] = {ain[0:0], ain[WIDTH-1:1]};
+        products[3*WIDTH-1:2*WIDTH] = {ain[1:0], ain[WIDTH-1:2]};
+        products[4*WIDTH-1:3*WIDTH] = {ain[2:0], ain[WIDTH-1:3]};
+        products[5*WIDTH-1:4*WIDTH] = {ain[3:0], ain[WIDTH-1:4]};        
         //...
         // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[(i-1):0], ain[WIDTH-1]:i]};
         //...
-        products[5*WIDTH-1:4*WIDTH] = {ain[4:0], ain[WIDTH-1:5]};        
-        products[6*WIDTH-1:5*WIDTH] = {ain[5:0], ain[WIDTH-1:6]};        
-        products[7*WIDTH-1:6*WIDTH] = {ain[6:0], ain[WIDTH-1:7]};
+        products[6*WIDTH-1:5*WIDTH] = {ain[4:0], ain[WIDTH-1:5]};        
+        products[7*WIDTH-1:6*WIDTH] = {ain[5:0], ain[WIDTH-1:6]};        
+        products[8*WIDTH-1:7*WIDTH] = {ain[6:0], ain[WIDTH-1:7]};
     end
     else // LEFT
     begin
-        products[1*WIDTH-1:0*WIDTH] = {ain[WIDTH-2:0], ain[WIDTH-1:WIDTH-1]};
-        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-3:0], ain[WIDTH-1:WIDTH-2]};
-        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-4:0], ain[WIDTH-1:WIDTH-3]};
-        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-5:0], ain[WIDTH-1:WIDTH-4]};
+		products[1*WIDTH-1:0*WIDTH] = ain;
+        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-2:0], ain[WIDTH-1:WIDTH-1]};
+        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-3:0], ain[WIDTH-1:WIDTH-2]};
+        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-4:0], ain[WIDTH-1:WIDTH-3]};
+        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-5:0], ain[WIDTH-1:WIDTH-4]};
         //...
         // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], ain[WIDTH-1:WIDTH-i]};
         //...
-        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-6:0], ain[WIDTH-1:WIDTH-5]};        
-        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-7:0], ain[WIDTH-1:WIDTH-6]};        
-        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-8:0], ain[WIDTH-1:WIDTH-7]};
+        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-6:0], ain[WIDTH-1:WIDTH-5]};        
+        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-7:0], ain[WIDTH-1:WIDTH-6]};        
+        products[8*WIDTH-1:7*WIDTH] = {ain[WIDTH-8:0], ain[WIDTH-1:WIDTH-7]};
     end
 end
 else // SHIFT
 begin
-    if (RIGHT) begin 
-        products[1*WIDTH-1:0*WIDTH] = {1'b0, ain[WIDTH-1:WIDTH-1]};
-        products[2*WIDTH-1:1*WIDTH] = {2'b0, ain[WIDTH-1:WIDTH-2]};
-        products[3*WIDTH-1:2*WIDTH] = {3'b0, ain[WIDTH-1:WIDTH-3]};
-        products[4*WIDTH-1:3*WIDTH] = {4'b0, ain[WIDTH-1:WIDTH-4]};
+    if (RIGHT) begin
+		products[1*WIDTH-1:0*WIDTH] = ain;
+        products[2*WIDTH-1:1*WIDTH] = {1'b0, ain[WIDTH-1:WIDTH-1]};
+        products[3*WIDTH-1:2*WIDTH] = {2'b0, ain[WIDTH-1:WIDTH-2]};
+        products[4*WIDTH-1:3*WIDTH] = {3'b0, ain[WIDTH-1:WIDTH-3]};
+        products[5*WIDTH-1:4*WIDTH] = {4'b0, ain[WIDTH-1:WIDTH-4]};
         //...
         // products[i*WIDTH-1:(i-1)*WIDTH] = {{i{1'b0}}, ain[WIDTH-1:WIDTH-i]};
         //...
-        products[5*WIDTH-1:4*WIDTH] = {5'b0, ain[WIDTH-1:WIDTH-5]};        
-        products[6*WIDTH-1:5*WIDTH] = {6'b0, ain[WIDTH-1:WIDTH-6]};        
-        products[7*WIDTH-1:6*WIDTH] = {7'b0, ain[WIDTH-1:WIDTH-7]};
+        products[6*WIDTH-1:5*WIDTH] = {5'b0, ain[WIDTH-1:WIDTH-5]};        
+        products[7*WIDTH-1:6*WIDTH] = {6'b0, ain[WIDTH-1:WIDTH-6]};        
+        products[8*WIDTH-1:7*WIDTH] = {7'b0, ain[WIDTH-1:WIDTH-7]};
     end
     else // LEFT
     begin
-        products[1*WIDTH-1:0*WIDTH] = {ain[WIDTH-2:0], 1'b0};
-        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-3:0], 2'b0};
-        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-4:0], 3'b0};
-        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-5:0], 4'b0};
+		products[1*WIDTH-1:0*WIDTH] = ain;
+        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-2:0], 1'b0};
+        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-3:0], 2'b0};
+        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-4:0], 3'b0};
+        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-5:0], 4'b0};
         //...
         // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], {i{1'b0}}};
         //...
-        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-6:0], 5'b1}; 
-        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-7:0], 6'b1};
-        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-8:0], 7'b1};
+        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-6:0], 5'b1}; 
+        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-7:0], 6'b1};
+        products[8*WIDTH-1:7*WIDTH] = {ain[WIDTH-8:0], 7'b1};
     end
+end
 end
 
 mux_general m0(
     .zout(zout), 
-    .inputs(les produits TODOOOOOOOOO), 
+    .inputs(products), 
     .sel(bin[2:0])
 );
-defparam .WIDTH=WIDTH;
-defparam .SEL_WIDTH=3;
+defparam m0 .WIDTH=WIDTH;
+defparam m0 .SEL_WIDTH=3;
 
 endmodule
 
+/// rotate right
+module ror8bit(zout, ain, bin);
 
-module ror8bit();
+output [7:0] zout;
+input [7:0] ain, bin;
+
+shiftrotateWIDTHbit m(zout, ain, bin);
+defparam m .WIDTH = 8;
+defparam m .RIGHT = 1;
+defparam m .ROTATE = 1;
 
 endmodule
 
-module rol8bit();
+/// rotate left
+module rol8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+shiftrotateWIDTHbit m(zout, ain, bin);
+defparam m .WIDTH = 8;
+defparam m .RIGHT = 0;
+defparam m .ROTATE = 1;
 
 endmodule
 
 /// shift right logical (multiply by 2)
-module srl8bit();
+module srl8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+shiftrotateWIDTHbit m(zout, ain, bin);
+defparam m .WIDTH = 8;
+defparam m .RIGHT = 1;
+defparam m .ROTATE = 0;
 
 endmodule
 
 /// shift left logical (divide by 2)
-module sll8bit();
+module sll8bit(zout, ain, bin);
+
+output [7:0] zout;
+input [7:0] ain, bin;
+
+shiftrotateWIDTHbit m(zout, ain, bin);
+defparam m .WIDTH = 8;
+defparam m .RIGHT = 0;
+defparam m .ROTATE = 0;
 
 endmodule
 
@@ -782,8 +939,6 @@ input [7:0] ain, bin;
 
 // The project description requires gate level modeling is used. 
 
-// assign zout = 8'b0000_0000;
-
 wire [7:0] w1;
 
 not (w1, ain);
@@ -794,36 +949,69 @@ endmodule
 
 
 
+module alu8bit(aluout, ain, bin, ctrl);
 
-
-
-
-//
-
-
-
-
-
-
-
-
-module alu8bit(zout, overflow, ain, bin, ctrl);
-
-output [7:0] zout;
-output overflow;
+output [7:0] aluout;
 input [7:0] ain, bin;
 input [3:0] ctrl;
 
-/////// trying this: an array of wires
-wire [7:0] w[0:15];
+/// wires
+wire [7:0] add8bit_w;
+wire [7:0] sub8bit_w;
+wire [7:0] rsb8bit_w;
+wire [7:0] mul4bithigh_w;
+wire [7:0] nor8bit_w;
+wire [7:0] not8bit_w; 
+wire [7:0] nand8bit_w;
+wire [7:0] xnor8bit_w;
+wire [7:0] srl8bit_w;
+wire [7:0] sll8bit_w;
+wire [7:0] ror8bit_w;
+wire [7:0] rol8bit_w;
+wire [7:0] nop8bit1_w;
+wire [7:0] nop8bit2_w;
+wire [7:0] nop8bit3_w;
+wire [7:0] nop8bit4_w;
 
-// big pile of instantiations, with defparams
+/// compute modules
+add8bit m0(add8bit_w, ain, bin); 
+sub8bit m1(sub8bit_w, ain, bin); 
+rsb8bit m2(rsb8bit_w, ain, bin); 
+mul4bithigh m3(mul4bithigh_w, ain, bin); 
+nor8bit m4(nor8bit_w, ain, bin); 
+not8bit m5(not8bit_w, ain, bin); 
+nand8bit m6(nand8bit_w, ain, bin); 
+xnor8bit m7(xnor8bit_w, ain, bin); 
+srl8bit m8(srl8bit_w, ain, bin); 
+sll8bit m9(sll8bit_w, ain, bin); 
+ror8bit m10(ror8bit_w, ain, bin); 
+rol8bit m11(rol8bit_w, ain, bin); 
+nop8bit1 m12(nop8bit1_w, ain, bin);
+nop8bit2 m13(nop8bit2_w, ain, bin);
+nop8bit3 m14(nop8bit3_w, ain, bin);
+nop8bit4 m15(nop8bit4_w, ain, bin);
 
-controller m0(
-	// todo
+/// controller module
+controller m16(
+	.aluout(aluout), 
+	.ctrl(ctrl), 
+	.add8bit(add8bit_w), 
+	.sub8bit(sub8bit_w), 
+	.rsb8bit(rsb8bit_w), 
+	.mul4bithigh(mul4bithigh_w), 
+	.nor8bit(nor8bit_w), 
+	.not8bit(not8bit_w), 
+	.nand8bit(nand8bit_w), 
+	.xnor8bit(xnor8bit_w), 
+	.srl8bit(srl8bit_w), 
+	.sll8bit(sll8bit_w), 
+	.ror8bit(ror8bit_w),
+	.rol8bit(rol8bit_w),
+	.nop8bit1(nop8bit1_w),
+	.nop8bit2(nop8bit2_w), 
+	.nop8bit3(nop8bit3_w), 
+	.nop8bit4(nop8bit4_w)
 );
-// defparam here
-
 
 endmodule
 
@@ -837,11 +1025,76 @@ endmodule
 
 
 
+
+
+
 //
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////////////
+// Part 3
+////////////////
+
+
+
+
+
+
+// todo
+
+
+
+
+
+
+
+
+
+
+
+
+//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////////////
+// Part 4
+////////////////
 
 
 
@@ -858,16 +1111,15 @@ endmodule
 //+ (2) The memory is write-enabled if and only if Enable is high, WE is high, and RE is low. 
 //+ (3) The memory is read-enabled if and only if Enable is high, WE is low, and RE is high. 
 //+ (4) Changes to memory may occur only at positive clock edges. 
-module MEM(data_out, address, data_in, WE, RE, clk, Enable);
+module MEM_general(data_out, address, data_in, WE, RE, clk, Enable);
 parameter WORDSIZE = 8;
 parameter NUM_WORDS = 512;
 
 output [WORDSIZE-1:0] data_out;
 reg [WORDSIZE-1:0] data_out;
-
 input [WORDSIZE-1:0] data_in;
 input [NUM_WORDS-1:0] address;
-///// ???????????????????? I'm not sure if this works - can I index an array with a net????
+input WE, RE, clk, Enable;
 
 reg [WORDSIZE-1:0] mem[0:NUM_WORDS-1];
 
@@ -894,6 +1146,108 @@ end
 
 endmodule
 
+
+
+/// RAM memory containing 512 words of 8 bits each, to project specification.
+module MEM(data_out, address, data_in, WE, RE, clk, Enable);
+
+output [7:0] data_out;
+input [7:0] data_in;
+input [511:0] address;
+input WE, RE, clk, Enable;
+
+MEM_general m0(data_out, address, data_in, WE, RE, clk, Enable);
+defparam m0 .WORDSIZE=8;
+defparam m0 .NUM_WORDS=512;
+
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////////////
+// Top module
+////////////////
+
+
+
+
+
+
+
+
+
+
+module project001
+	(multout, ain, bin);
+//	(aluout, ain, bin);
+//	(MEMout, address, data_in, WE, RE, clk, Enable);
+
+
+////////////////////
+// Part 1 stimulus
+////////////////////
+
+output [7:0] multout;
+input [3:0] ain, bin;
+
+mult4bit m(multout, ain, bin);
+
+
+
+////////////////////
+// Part 2 stimulus
+////////////////////
+
+//output [7:0] aluout;
+//input [7:0] ain, bin;
+//input [3:0] ctrl;
+
+//alu8bit m(aluout, ain, bin, ctrl);
+
+
+
+////////////////////
+// Part 3 stimulus
+////////////////////
+
+//output [7:0] aluout;
+//input [7:0] ain, bin;
+//input [3:0] ctrl;
+
+//alu8bit m(aluout, ain, bin, ctrl);
+
+
+
+////////////////////
+// Part 4 stimulus
+////////////////////
+
+//) To test correctness, we will bring down the parameters to something manageable. 
+
+//output [1:0] MEMout;
+//input [1:0] data_in;
+//input [3:0] address;
+//input clk;
+//input WE, RE, Enable;
+
+//MEM_general m(MEMout, address, data_in, WE, RE, clk, Enable);
+//defparam m .WORDSIZE=2;
+//defparam m .NUM_WORDS=4;
+
+
+
+endmodule
 
 
 
