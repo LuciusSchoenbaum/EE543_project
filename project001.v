@@ -1,6 +1,6 @@
 // File project001.v Created by Lucius Schoenbaum November 29, 2019
 // EE 543 project for Dr. Na Gong, Fall 2019
-
+// part 1 (gate-level modeling)
 
 
 // For the project code, I have preferred "flat" nets over vectors. 
@@ -1200,7 +1200,7 @@ parameter NUM_WORDS = 512;
 output [WORDSIZE-1:0] data_out;
 reg [WORDSIZE-1:0] data_out;
 input [WORDSIZE-1:0] data_in;
-input [NUM_WORDS-1:0] address;
+input [log2(NUM_WORDS):0] address;
 input WE, RE, clk, Enable;
 
 reg [WORDSIZE-1:0] mem[0:NUM_WORDS-1];
@@ -1226,6 +1226,8 @@ always @(posedge clk) begin
 		// in all other case (!Enable, or Enable but not {RE,WE} == 10 or 01), the memory is disabled.
 end
 
+`include "log2.inc"
+
 endmodule
 
 
@@ -1235,13 +1237,14 @@ module MEM(data_out, address, data_in, WE, RE, clk, Enable);
 
 output [7:0] data_out;
 input [7:0] data_in;
-input [511:0] address;
+input [log2(512):0] address;
 input WE, RE, clk, Enable;
 
 MEM_general m0(data_out, address, data_in, WE, RE, clk, Enable);
 defparam m0 .WORDSIZE=8;
 defparam m0 .NUM_WORDS=512;
 
+`include "log2.inc"
 
 endmodule
 
@@ -1284,8 +1287,8 @@ endmodule
 // top module
 module project001
 //	(multout, ain, bin);
-	(aluout, ain, bin, ctrl);
-//	(MEMout, address, data_in, WE, RE, clk, Enable);
+//	(aluout, ain, bin, ctrl);
+	(MEMout, address, data_in, WE, RE, clk, Enable);
 
 
 ////////////////////
@@ -1303,11 +1306,11 @@ module project001
 // Part 2 stimulus
 ////////////////////
 
-output [7:0] aluout;
-input [7:0] ain, bin;
-input [3:0] ctrl;
-
-alu8bit m(aluout, ain, bin, ctrl);
+//output [7:0] aluout;
+//input [7:0] ain, bin;
+//input [3:0] ctrl;
+//
+//alu8bit m(aluout, ain, bin, ctrl);
 
 
 
@@ -1329,15 +1332,16 @@ alu8bit m(aluout, ain, bin, ctrl);
 
 //) To test correctness, we will bring down the parameters to something manageable. 
 
-//output [1:0] MEMout;
-//input [1:0] data_in;
-//input [3:0] address;
-//input clk;
-//input WE, RE, Enable;
-//
-//MEM_general m(MEMout, address, data_in, WE, RE, clk, Enable);
-//defparam m .WORDSIZE=2;
-//defparam m .NUM_WORDS=4;
+output [1:0] MEMout;
+input [1:0] data_in;
+input [1:0] address;
+input clk;
+input WE, RE, Enable;
+
+MEM_general m(MEMout, address, data_in, WE, RE, clk, Enable);
+defparam m .WORDSIZE=2;
+defparam m .NUM_WORDS=4;
+
 
 
 endmodule
