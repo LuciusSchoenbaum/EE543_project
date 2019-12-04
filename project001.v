@@ -1,5 +1,6 @@
 // File project001.v Created by Lucius Schoenbaum November 29, 2019
 // EE 543 project for Dr. Na Gong, Fall 2019
+// part 1 (gate-level modeling)
 
 
 
@@ -7,7 +8,7 @@
 // My experience with Verilog vectors has been that they are not convenient, 
 // particularly because inputs and outputs cannot be vectors. 
 // Therefore, rather than mixing styles, I have used flat nets throughout, 
-// and avoided the use of vectors. 
+// and avoided the use of vectors. Perhaps I can learn better how to use them one day. 
 
 // I worked with general input widths. I did this to practice this coding style. 
 // I found that it was worth the extra work, because I grew more comfortable 
@@ -158,9 +159,8 @@ full_adder ml(
 	.cin(w[WIDTH-1])
 );
 
-genvar i;
-
 // modules 1 through WIDTH-2
+genvar i;
 generate
 	for (i = 1; i < WIDTH-1; i=i+1) begin: loop
 		full_adder mi(
@@ -430,6 +430,23 @@ endgenerate
 
 endmodule
 
+/// buffer
+module bBUF(zout, ain);
+parameter WIDTH = 8;
+
+input [WIDTH-1:0] ain;
+output [WIDTH-1:0] zout;
+
+genvar i;
+
+generate 
+	for (i=0; i<WIDTH; i=i+1) begin: loop
+		buf mi(zout[i], ain[i]);
+	end
+endgenerate
+
+endmodule
+
 /// nor
 module bNOR(zout, ain, bin);
 parameter WIDTH = 8;
@@ -463,7 +480,6 @@ generate
 endgenerate
 
 endmodule
-
 
 
 
@@ -516,8 +532,8 @@ parameter WIDTH = 8;
 parameter LEVEL = 0;
 localparam NUM_MUXES = 2**LEVEL;
 
-output [LEVEL*WIDTH-1:0] layerout; 
-input [2*LEVEL*WIDTH-1:0] layerin;
+output [NUM_MUXES*WIDTH-1:0] layerout; 
+input [2*NUM_MUXES*WIDTH-1:0] layerin;
 input sel;
 
 genvar i;
@@ -601,7 +617,7 @@ module controller(
 	add8bit, 
 	sub8bit, 
 	rsb8bit, 
-	mul4bithigh, 
+	mult4bithigh, 
 	nor8bit, 
 	not8bit, 
 	nand8bit, 
@@ -624,7 +640,7 @@ input [3:0] ctrl;
 input [7:0] add8bit; 
 input [7:0] sub8bit; 
 input [7:0] rsb8bit; 
-input [7:0] mul4bithigh; 
+input [7:0] mult4bithigh; 
 input [7:0] nor8bit; 
 input [7:0] not8bit; 
 input [7:0] nand8bit; 
@@ -640,24 +656,29 @@ input [7:0] nop8bit4;
 
 mux_general m1(
 	.zout(aluout), 
-	.inputs({
-		nop8bit1[7:0], // ctrl = 0000
-		add8bit[7:0], // ctrl = 0001
-		sub8bit[7:0], // ctrl = 0010
-		rsb8bit[7:0], // ctrl = 0011
-		mul4bithigh[7:0], // ctrl = 0100
-		nop8bit2[7:0], // ctrl = 0101
-		nop8bit3[7:0], // ctrl = 0110
-		nop8bit4[7:0], // ctrl = 0111
-		nor8bit[7:0], // ctrl = 1000
-		not8bit[7:0], // ctrl = 1001
-		nand8bit[7:0], // ctrl = 1010
-		xnor8bit[7:0], // ctrl = 1011
-		srl8bit[7:0], // ctrl = 1100
-		sll8bit[7:0], // ctrl = 1101
+	.inputs(
+		// we pass the inputs in as a flat vector. 
+		// The order (as text in this file) should be decreasing, 
+		// because the inputs vector is indexed with LSB=0 (low to high indexing). 
+		{
+		rol8bit[7:0], // ctrl = 1111
 		ror8bit[7:0], // ctrl = 1110
-		rol8bit[7:0] // ctrl = 1111
-	}), 
+		sll8bit[7:0], // ctrl = 1101
+		srl8bit[7:0], // ctrl = 1100
+		xnor8bit[7:0], // ctrl = 1011
+		nand8bit[7:0], // ctrl = 1010
+		not8bit[7:0], // ctrl = 1001
+		nor8bit[7:0], // ctrl = 1000
+		nop8bit4[7:0], // ctrl = 0111
+		nop8bit3[7:0], // ctrl = 0110
+		nop8bit2[7:0], // ctrl = 0101
+		mult4bithigh[7:0], // ctrl = 0100
+		rsb8bit[7:0], // ctrl = 0011
+		sub8bit[7:0], // ctrl = 0010
+		add8bit[7:0], // ctrl = 0001
+		nop8bit1[7:0] // ctrl = 0000
+		}
+	), 
 	.sel(ctrl)
 );
 defparam m1 .WIDTH=8;
@@ -747,8 +768,10 @@ output [7:0] zout;
 input [7:0] ain, bin;
 reg cin = 1'b1;
 
-bNOT m0(zout, bin);
-ripple_adder m1(zout, , ain, bin, cin);
+wire [7:0] w;
+
+bNOT m0(w, bin);
+ripple_adder m1(zout, , ain, w, cin);
 
 defparam m0 .WIDTH=8;
 defparam m1 .WIDTH=8;
@@ -762,8 +785,10 @@ output [7:0] zout;
 input [7:0] ain, bin;
 reg cin = 1'b1;
 
-bNOT m0(zout, ain);
-ripple_adder m1(zout, , ain, bin, cin);
+wire [7:0] w;
+
+bNOT m0(w, ain);
+ripple_adder m1(zout, , w, bin, cin);
 
 defparam m0 .WIDTH=8;
 defparam m1 .WIDTH=8;
@@ -800,81 +825,65 @@ parameter ROTATE = 0;
 input [WIDTH-1:0] ain, bin;
 output [WIDTH-1:0] zout;
 
-reg [8*WIDTH-1:0] products;
+wire [8*WIDTH-1:0] products;
 
 // The project description requires gate level modeling is used. 
-// Currently I am using an initial block because my original idea requires it, 
-// (which I didn't realize) and I haven't had time to redo it using gate-level code. 
+// I use buffer gates along with the concatenation operation for nets and regs
+// to set up the inputs to the shifter/rotator's mux.
 
-initial begin
+// because Verilog's array range operator and Verilog's concatenation operator 
+// do not play well together (one might argue), 
+// we must break the zeroth module out of this loop. 
+bBUF m0(products[WIDTH-1:0], ain);
+defparam m0 .WIDTH=WIDTH;
+
+genvar i;
+generate
 if (ROTATE) begin
     if (RIGHT) begin
-		products[1*WIDTH-1:0*WIDTH] = ain;
-        products[2*WIDTH-1:1*WIDTH] = {ain[0:0], ain[WIDTH-1:1]};
-        products[3*WIDTH-1:2*WIDTH] = {ain[1:0], ain[WIDTH-1:2]};
-        products[4*WIDTH-1:3*WIDTH] = {ain[2:0], ain[WIDTH-1:3]};
-        products[5*WIDTH-1:4*WIDTH] = {ain[3:0], ain[WIDTH-1:4]};        
-        //...
-        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[(i-1):0], ain[WIDTH-1]:i]};
-        //...
-        products[6*WIDTH-1:5*WIDTH] = {ain[4:0], ain[WIDTH-1:5]};        
-        products[7*WIDTH-1:6*WIDTH] = {ain[5:0], ain[WIDTH-1:6]};        
-        products[8*WIDTH-1:7*WIDTH] = {ain[6:0], ain[WIDTH-1:7]};
+		for (i=1; i<8; i=i+1) begin: loop
+			// rotate ain i bits to the right
+			bBUF mi(products[(i+1)*WIDTH-1:i*WIDTH], {ain[(i-1):0], ain[WIDTH-1:i]});
+			defparam mi .WIDTH=WIDTH;
+        end
     end
     else // LEFT
     begin
-		products[1*WIDTH-1:0*WIDTH] = ain;
-        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-2:0], ain[WIDTH-1:WIDTH-1]};
-        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-3:0], ain[WIDTH-1:WIDTH-2]};
-        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-4:0], ain[WIDTH-1:WIDTH-3]};
-        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-5:0], ain[WIDTH-1:WIDTH-4]};
-        //...
-        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], ain[WIDTH-1:WIDTH-i]};
-        //...
-        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-6:0], ain[WIDTH-1:WIDTH-5]};        
-        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-7:0], ain[WIDTH-1:WIDTH-6]};        
-        products[8*WIDTH-1:7*WIDTH] = {ain[WIDTH-8:0], ain[WIDTH-1:WIDTH-7]};
+		for (i=1; i<8; i=i+1) begin: loop
+			// rotate ain i bits to the left
+			bBUF mi(products[(i+1)*WIDTH-1:i*WIDTH], {ain[WIDTH-i-1:0], ain[WIDTH-1:WIDTH-i]});
+			defparam mi .WIDTH=WIDTH;
+		end
     end
 end
 else // SHIFT
 begin
     if (RIGHT) begin
-		products[1*WIDTH-1:0*WIDTH] = ain;
-        products[2*WIDTH-1:1*WIDTH] = {1'b0, ain[WIDTH-1:WIDTH-1]};
-        products[3*WIDTH-1:2*WIDTH] = {2'b0, ain[WIDTH-1:WIDTH-2]};
-        products[4*WIDTH-1:3*WIDTH] = {3'b0, ain[WIDTH-1:WIDTH-3]};
-        products[5*WIDTH-1:4*WIDTH] = {4'b0, ain[WIDTH-1:WIDTH-4]};
-        //...
-        // products[i*WIDTH-1:(i-1)*WIDTH] = {{i{1'b0}}, ain[WIDTH-1:WIDTH-i]};
-        //...
-        products[6*WIDTH-1:5*WIDTH] = {5'b0, ain[WIDTH-1:WIDTH-5]};        
-        products[7*WIDTH-1:6*WIDTH] = {6'b0, ain[WIDTH-1:WIDTH-6]};        
-        products[8*WIDTH-1:7*WIDTH] = {7'b0, ain[WIDTH-1:WIDTH-7]};
+		for (i=1; i<8; i=i+1) begin: loop
+			// shift ain i bits to the right
+			bBUF mi(products[(i+1)*WIDTH-1:i*WIDTH], {{i{1'b0}}, ain[WIDTH-1:i]});
+			defparam mi .WIDTH=WIDTH;
+		end
     end
     else // LEFT
     begin
-		products[1*WIDTH-1:0*WIDTH] = ain;
-        products[2*WIDTH-1:1*WIDTH] = {ain[WIDTH-2:0], 1'b0};
-        products[3*WIDTH-1:2*WIDTH] = {ain[WIDTH-3:0], 2'b0};
-        products[4*WIDTH-1:3*WIDTH] = {ain[WIDTH-4:0], 3'b0};
-        products[5*WIDTH-1:4*WIDTH] = {ain[WIDTH-5:0], 4'b0};
-        //...
-        // products[i*WIDTH-1:(i-1)*WIDTH] = {ain[WIDTH-i-1:0], {i{1'b0}}};
-        //...
-        products[6*WIDTH-1:5*WIDTH] = {ain[WIDTH-6:0], 5'b1}; 
-        products[7*WIDTH-1:6*WIDTH] = {ain[WIDTH-7:0], 6'b1};
-        products[8*WIDTH-1:7*WIDTH] = {ain[WIDTH-8:0], 7'b1};
+		for (i=1; i<8; i=i+1) begin: loop
+			// shift ain i bits to the left
+			bBUF mi(products[(i+1)*WIDTH-1:i*WIDTH], {ain[WIDTH-i-1:0], {i{1'b0}}});
+			defparam mi .WIDTH=WIDTH;
+		end
     end
 end
-end
+endgenerate
 
-mux_general m0(
+mux_general m(
     .zout(zout), 
     .inputs(products), 
+    // the three lower bits of input 2 determine the value to be shifted/rotated
     .sel(bin[2:0])
 );
-defparam m0 .WIDTH=WIDTH;
-defparam m0 .SEL_WIDTH=3;
+defparam m .WIDTH=WIDTH;
+defparam m .SEL_WIDTH=3;
 
 endmodule
 
@@ -939,10 +948,15 @@ input [7:0] ain, bin;
 
 // The project description requires gate level modeling is used. 
 
-wire [7:0] w1;
+wire [7:0] w;
 
-not (w1, ain);
-and (zout, ain, w1);
+genvar i;
+generate
+	for (i=0; i<8; i=i+1) begin: loop
+		not (w[i], ain[i]);
+		and (zout[i], ain[i], w[i]);
+	end
+endgenerate
 
 endmodule
 
@@ -959,7 +973,7 @@ input [3:0] ctrl;
 wire [7:0] add8bit_w;
 wire [7:0] sub8bit_w;
 wire [7:0] rsb8bit_w;
-wire [7:0] mul4bithigh_w;
+wire [7:0] mult4bithigh_w;
 wire [7:0] nor8bit_w;
 wire [7:0] not8bit_w; 
 wire [7:0] nand8bit_w;
@@ -977,7 +991,7 @@ wire [7:0] nop8bit4_w;
 add8bit m0(add8bit_w, ain, bin); 
 sub8bit m1(sub8bit_w, ain, bin); 
 rsb8bit m2(rsb8bit_w, ain, bin); 
-mul4bithigh m3(mul4bithigh_w, ain, bin); 
+mult4bithigh m3(mult4bithigh_w, ain, bin); 
 nor8bit m4(nor8bit_w, ain, bin); 
 not8bit m5(not8bit_w, ain, bin); 
 nand8bit m6(nand8bit_w, ain, bin); 
@@ -986,10 +1000,10 @@ srl8bit m8(srl8bit_w, ain, bin);
 sll8bit m9(sll8bit_w, ain, bin); 
 ror8bit m10(ror8bit_w, ain, bin); 
 rol8bit m11(rol8bit_w, ain, bin); 
-nop8bit1 m12(nop8bit1_w, ain, bin);
-nop8bit2 m13(nop8bit2_w, ain, bin);
-nop8bit3 m14(nop8bit3_w, ain, bin);
-nop8bit4 m15(nop8bit4_w, ain, bin);
+nop8bit m12(nop8bit1_w, ain, bin);
+nop8bit m13(nop8bit2_w, ain, bin);
+nop8bit m14(nop8bit3_w, ain, bin);
+nop8bit m15(nop8bit4_w, ain, bin);
 
 /// controller module
 controller m16(
@@ -998,7 +1012,7 @@ controller m16(
 	.add8bit(add8bit_w), 
 	.sub8bit(sub8bit_w), 
 	.rsb8bit(rsb8bit_w), 
-	.mul4bithigh(mul4bithigh_w), 
+	.mult4bithigh(mult4bithigh_w), 
 	.nor8bit(nor8bit_w), 
 	.not8bit(not8bit_w), 
 	.nand8bit(nand8bit_w), 
@@ -1060,7 +1074,76 @@ endmodule
 
 
 
-// todo
+// For Part 2, we must use dataflow or behavioral-level techniques 
+// to implement the same ALU as in Part 2. 
+// This frees us to use the high level Verilog operations (+), (*), (<<), (>>), and so on. 
+// We can finish by wrapping it all in a case statement. 
+// As a result, we can implement the design with no intermediate nets or registers, 
+// much as we would in a high level declarative programming language. 
+
+
+module alu8bit_Part3(aluout, ain, bin, ctrl);
+
+output [7:0] aluout;
+reg [7:0] aluout;
+input [7:0] ain, bin;
+input [3:0] ctrl;
+
+always @(*) begin
+	case(ctrl) 
+		4'b0001: // add
+			assign aluout = ain + bin;
+		4'b0010: // sub
+			assign aluout = ain - bin;
+		4'b0011: // rsb
+			assign aluout = bin - ain;
+		4'b0100: // mult4bithigh
+			assign aluout = {4'b0, ain[7:4]} * {4'b0, bin[7:4]};
+		4'b1000: // nor
+			assign aluout = ~(ain | bin);
+		4'b1001: // not
+			assign aluout = ~bin;
+		4'b1010: // nand
+			assign aluout = ~(ain & bin);
+		4'b1011: // xnor
+			assign aluout = ain ~^ bin;
+		4'b1100: // srl
+			assign aluout = ain >> bin[2:0];
+			
+		4'b1101: // sll
+			assign aluout = ain << bin[2:0];
+		4'b1110: // ror
+			assign aluout = 
+					(bin[2:0] == 3'b000) ? ain :
+					(bin[2:0] == 3'b001) ? {ain[0:0], ain[7:1]} : 
+					(bin[2:0] == 3'b010) ? {ain[1:0], ain[7:2]} : 
+					(bin[2:0] == 3'b011) ? {ain[2:0], ain[7:3]} : 
+					(bin[2:0] == 3'b100) ? {ain[3:0], ain[7:4]} : 
+					(bin[2:0] == 3'b101) ? {ain[4:0], ain[7:5]} : 
+					(bin[2:0] == 3'b110) ? {ain[5:0], ain[7:6]} : 
+					// (bin[2:0] == 3'b111) ? 
+					{ain[6:0], ain[7:7]}
+					;
+		4'b1111: // rol
+			assign aluout = 
+					(bin[2:0] == 3'b000) ? ain :
+					(bin[2:0] == 3'b001) ? {ain[6:0], ain[7:7]} : 
+					(bin[2:0] == 3'b010) ? {ain[5:0], ain[7:6]} : 
+					(bin[2:0] == 3'b011) ? {ain[4:0], ain[7:5]} : 
+					(bin[2:0] == 3'b100) ? {ain[3:0], ain[7:4]} : 
+					(bin[2:0] == 3'b101) ? {ain[2:0], ain[7:3]} : 
+					(bin[2:0] == 3'b110) ? {ain[1:0], ain[7:2]} : 
+					// (bin[2:0] == 3'b111) ? 
+					{ain[0:0], ain[7:1]}
+					;
+		default: 
+			assign aluout = 8'b0;
+	endcase
+end
+
+endmodule
+
+
 
 
 
@@ -1175,6 +1258,18 @@ endmodule
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ////////////////
 // Top module
 ////////////////
@@ -1187,10 +1282,10 @@ endmodule
 
 
 
-
+// top module
 module project001
-	(multout, ain, bin);
-//	(aluout, ain, bin);
+//	(multout, ain, bin);
+	(aluout, ain, bin, ctrl);
 //	(MEMout, address, data_in, WE, RE, clk, Enable);
 
 
@@ -1198,10 +1293,10 @@ module project001
 // Part 1 stimulus
 ////////////////////
 
-output [7:0] multout;
-input [3:0] ain, bin;
-
-mult4bit m(multout, ain, bin);
+//output [7:0] multout;
+//input [3:0] ain, bin;
+//
+//mult4bit m(multout, ain, bin);
 
 
 
@@ -1209,11 +1304,11 @@ mult4bit m(multout, ain, bin);
 // Part 2 stimulus
 ////////////////////
 
-//output [7:0] aluout;
-//input [7:0] ain, bin;
-//input [3:0] ctrl;
+output [7:0] aluout;
+input [7:0] ain, bin;
+input [3:0] ctrl;
 
-//alu8bit m(aluout, ain, bin, ctrl);
+alu8bit m(aluout, ain, bin, ctrl);
 
 
 
@@ -1225,7 +1320,7 @@ mult4bit m(multout, ain, bin);
 //input [7:0] ain, bin;
 //input [3:0] ctrl;
 
-//alu8bit m(aluout, ain, bin, ctrl);
+//alu8bit_Part3 m(aluout, ain, bin, ctrl);
 
 
 
@@ -1240,11 +1335,10 @@ mult4bit m(multout, ain, bin);
 //input [3:0] address;
 //input clk;
 //input WE, RE, Enable;
-
+//
 //MEM_general m(MEMout, address, data_in, WE, RE, clk, Enable);
 //defparam m .WORDSIZE=2;
 //defparam m .NUM_WORDS=4;
-
 
 
 endmodule
