@@ -1,6 +1,5 @@
 // File project001.v Created by Lucius Schoenbaum November 29, 2019
 // EE 543 project for Dr. Na Gong, Fall 2019
-// part 1 (gate-level modeling)
 
 
 
